@@ -207,8 +207,15 @@ abstract class CSignature extends SignatureSpi {
         protected byte[] engineSign() throws SignatureException {
 
             byte[] hash = getDigestValue();
+            System.err.println("HcryptKey is: " + privateKey.getHCryptKey() + "\nAlways using signCngHash!");
+            System.err.println("This class is: " + this.getClass().getSimpleName());
 
-            if (privateKey.getHCryptKey() == 0) {
+            return signCngHash(1, hash, hash.length,
+                0,
+                this instanceof NONEwithRSA ? null : messageDigestAlgorithm,
+                privateKey.getHCryptProvider(), privateKey.getHCryptKey());
+
+		/*if (privateKey.getHCryptKey() == 0) {
                 return signCngHash(1, hash, hash.length,
                         0,
                         this instanceof NONEwithRSA ? null : messageDigestAlgorithm,
@@ -223,7 +230,7 @@ abstract class CSignature extends SignatureSpi {
 
                 // Convert signature array from little endian to big endian
                 return convertEndianArray(result);
-            }
+            }*/
         }
 
         /**
