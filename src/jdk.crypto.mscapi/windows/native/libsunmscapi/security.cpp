@@ -502,6 +502,18 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
         while (pCertContext = ::CertEnumCertificatesInStore(hCertStore, pCertContext))
         {
             PP("--------------------------");
+            if (trace) {
+                CRYPT_KEY_PROV_INFO cKeyProvInfo;
+                DWORD cKeyProvInfoSize = sizeof(cKeyProvInfo);
+                ::CertGetCertificateContextProperty(pCertContext, CERT_KEY_PROV_INFO_PROP_ID,
+                    &cKeyProvInfo, &cKeyProvInfoSize);
+                PP("CSP provider: %d", cKeyProvInfo.dwProvType);
+                
+//                char buffer[500];
+//                wcstombs(buffer, cKeyProvInfo.pwszProvName, 500);
+//				buffer[499] = '\0';
+//                PP("CSP or CNG provider name: %s", buffer);
+            }
             // Check if private key available - client authentication certificate
             // must have private key available.
             HCRYPTPROV_OR_NCRYPT_KEY_HANDLE hCryptProv = NULL;
