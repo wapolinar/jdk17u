@@ -523,9 +523,12 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
             else
             {
                 if (bCallerFreeProv == TRUE) {
+					PP("1");
                     if ((dwKeySpec & CERT_NCRYPT_KEY_SPEC) == CERT_NCRYPT_KEY_SPEC) {
+						PP("2");
                         NCryptFreeObject(hCryptProv);
                     } else {
+						PP("3");
                         ::CryptReleaseContext(hCryptProv, NULL); // deprecated
                     }
                     bCallerFreeProv = FALSE;
@@ -540,6 +543,7 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                 }
                 else
                 {
+					PP("4");
                     if ((dwKeySpec & CERT_NCRYPT_KEY_SPEC) == CERT_NCRYPT_KEY_SPEC) {
                         PP("CNG %I64d", (__int64)hCryptProv);
                     } else {
@@ -548,6 +552,7 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
 
                         // Skip certificate if cannot find private key
                         if (bGetUserKey == FALSE) {
+							PP("5");
                             if (bCallerFreeProv)
                                 ::CryptReleaseContext(hCryptProv, NULL); // deprecated
                             continue;
@@ -574,8 +579,10 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
             //
             if (GetCertificateChain(OID_EKU_ANY, pCertContext, &pCertChainContext))
             {
+				PP("6");
                 for (DWORD i = 0; i < pCertChainContext->cChain; i++)
                 {
+					PP("7chain");
                     // Found cert chain
                     PCERT_SIMPLE_CHAIN rgpChain =
                         pCertChainContext->rgpChain[i];
@@ -584,17 +591,20 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                     jobject jArrayList =
                         env->NewObject(clazzArrayList, mNewArrayList);
                     if (jArrayList == NULL) {
+						PP("8");
                         __leave;
                     }
 
                     // Cleanup the previous allocated name
                     if (pszNameString) {
+						PP("9");
                         delete [] pszNameString;
                         pszNameString = NULL;
                     }
 
                     for (unsigned int j=0; j < rgpChain->cElement; j++)
                     {
+						PP("10chain");
                         PCERT_CHAIN_ELEMENT rgpElement =
                             rgpChain->rgpElement[j];
                         PCCERT_CONTEXT pc = rgpElement->pCertContext;
@@ -602,6 +612,7 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                         // Retrieve the friendly name of the first certificate
                         // in the chain
                         if (j == 0) {
+							PP("11j==0");
 
                             // If the cert's name cannot be retrieved then
                             // pszNameString remains set to NULL.
@@ -612,10 +623,12 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                             if ((cchNameString = CertGetNameString(pc,
                                 CERT_NAME_FRIENDLY_DISPLAY_TYPE, 0, NULL,
                                 NULL, 0)) > 1) {
+								PP("12");
 
                                 // Found friendly name
                                 pszNameString = new (env) char[cchNameString];
                                 if (pszNameString == NULL) {
+									PP("13");
                                     __leave;
                                 }
 
@@ -624,6 +637,7 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                                     pszNameString, cchNameString);
                             }
                         }
+						PP("14");
 
                         BYTE* pbCertEncoded = pc->pbCertEncoded;
                         DWORD cbCertEncoded = pc->cbCertEncoded;
@@ -631,6 +645,7 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                         // Allocate and populate byte array
                         jbyteArray byteArray = env->NewByteArray(cbCertEncoded);
                         if (byteArray == NULL) {
+							PP("15");
                             __leave;
                         }
                         env->SetByteArrayRegion(byteArray, 0, cbCertEncoded,
@@ -649,10 +664,12 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                         PP("%s: %s", pszNameString, pCertContext->pCertInfo->SubjectPublicKeyInfo.Algorithm.pszObjId);
                         if (bHasNoPrivateKey)
                         {
+							PP("16");
                             // Generate certificate chain and store into cert chain
                             // collection
                             jstring name = env->NewStringUTF(pszNameString);
                             if (name == NULL) {
+								PP("17");
                                 __leave;
                             }
                             env->CallVoidMethod(obj, mGenCertChain,
@@ -661,7 +678,9 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                         }
                         else
                         {
+							PP("18");
                             if (hUserKey) {
+								PP("19");
                                 // Only accept RSA for CAPI
                                 DWORD dwData = CALG_RSA_KEYX;
                                 DWORD dwSize = sizeof(DWORD);
@@ -669,10 +688,12 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                                         &dwSize, NULL);
                                 if ((dwData & ALG_TYPE_RSA) == ALG_TYPE_RSA)
                                 {
+									PP("20");
                                     // Generate RSA certificate chain and store into cert
                                     // chain collection
                                     jstring name = env->NewStringUTF(pszNameString);
                                     if (name == NULL) {
+										PP("21");
                                         __leave;
                                     }
                                     env->CallVoidMethod(obj, mGenKeyAndCertChain,
@@ -682,20 +703,24 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                                             dwPublicKeyLength, jArrayList);
                                 }
                             } else {
+								PP("22");
                                 // Only accept EC for CNG
                                 BYTE buffer[32];
                                 DWORD len = 0;
                                 if (::NCryptGetProperty(
                                         hCryptProv, NCRYPT_ALGORITHM_PROPERTY,
                                         (PBYTE)buffer, 32, &len, NCRYPT_SILENT_FLAG) == ERROR_SUCCESS) {
+											PP("23");
                                     jstring name = env->NewStringUTF(pszNameString);
                                     if (name == NULL) {
+										PP("24");
                                         __leave;
                                     }
                                     if (buffer[0] == 'E' && buffer[2] == 'C'
                                             && (dwPublicKeyLength == 256
                                                     || dwPublicKeyLength == 384
                                                     || dwPublicKeyLength == 521)) {
+										PP("25");
                                         env->CallVoidMethod(obj, mGenKeyAndCertChain,
                                             0,
                                             name,
@@ -703,12 +728,14 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                                             dwPublicKeyLength, jArrayList);
                                     } else if (buffer[0] == 'R' && buffer[2] == 'S'
                                             && buffer[4] == 'A') {
+										PP("26");
                                         env->CallVoidMethod(obj, mGenKeyAndCertChain,
                                             1,
                                             name,
                                             (jlong) hCryptProv, (jlong) 0,
                                             dwPublicKeyLength, jArrayList);
                                     } else {
+										PP("27");
                                         dump("Unknown NCRYPT_ALGORITHM_PROPERTY", buffer, len);
                                     }
                                 }
@@ -716,17 +743,20 @@ JNIEXPORT void JNICALL Java_sun_security_mscapi_CKeyStore_loadKeysOrCertificateC
                         }
                     }
                 }
+				PP("28");
 
                 // Free cert chain
                 if (pCertChainContext)
                     ::CertFreeCertificateChain(pCertChainContext);
             } else {
+				PP("29");
                 PP("GetCertificateChain failed %d", GetLastError());
             }
         }
     }
     __finally
     {
+		PP("30");
         if (hCertStore)
             ::CertCloseStore(hCertStore, 0);
 

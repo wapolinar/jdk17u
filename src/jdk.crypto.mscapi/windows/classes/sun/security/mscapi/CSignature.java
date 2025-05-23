@@ -208,6 +208,7 @@ abstract class CSignature extends SignatureSpi {
 
             byte[] hash = getDigestValue();
             System.err.println("HcryptKey is: " + privateKey.getHCryptKey() + "\nAlways using signCngHash!");
+			System.err.println("HcryptProvider is: " + privateKey.getHCryptProvider());
             System.err.println("This class is: " + this.getClass().getSimpleName());
 
             return signCngHash(1, hash, hash.length,
