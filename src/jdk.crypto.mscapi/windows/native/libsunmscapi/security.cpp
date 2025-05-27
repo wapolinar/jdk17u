@@ -167,6 +167,20 @@ void ThrowException(JNIEnv *env, const char *exceptionName, DWORD dwError)
     ThrowExceptionWithMessage(env, exceptionName, szMessage2);
 }
 
+void PrintException(JNIEnv *env, const char *exceptionName, DWORD dwError) {
+    char szMessage[500];
+    szMessage[0] = '\0';
+    char szMessage2[1024];
+    szMessage2[0] = '\0';
+
+    DWORD res = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, dwError,
+        NULL, szMessage, sizeof(szMessage), NULL);
+    if (res == 0) {
+        strcpy(szMessage, "Unknown error");
+    }
+    snprintf(szMessage2, sizeof(szMessage2), "error %lu, %s", dwError, szMessage);
+    PP("Error: %s\n", szMessage2);
+}
 /*
  * Overloaded 'operator new[]' variant, which will raise Java's
  * OutOfMemoryError in the case of a failure.
@@ -827,24 +841,35 @@ JNIEXPORT jbyteArray JNICALL Java_sun_security_mscapi_CSignature_signHash
     {
         // Map hash algorithm
         ALG_ID algId = MapHashAlgorithm(env, jHashAlgorithm);
+        DWORD algIdLen = sizeof(ALG_ID);
+        PP("a1");
+        dump("MapHasAlgorithm", (BYTE*)&algId, algIdLen);
 
         // Acquire a hash object handle.
         if (::CryptCreateHash(HCRYPTPROV(hCryptProv), algId, 0, 0, &hHash) == FALSE) //deprecated
         {
+            PrintException(env, "CryptCreateHash", GetLastError());
+            PP("a2");
             // Failover to using the PROV_RSA_AES CSP
 
             DWORD cbData = 256;
-            BYTE pbData[256];
-            pbData[0] = '\0';
+            BYTE pbContainerData[256];
+            pbContainerData[0] = '\0';
 
             // Get name of the key container
-            ::CryptGetProvParam((HCRYPTPROV)hCryptProv, PP_CONTAINER, //deprecated
-                (BYTE *)pbData, &cbData, 0);
+            BOOL containerGpp = ::CryptGetProvParam((HCRYPTPROV)hCryptProv, PP_CONTAINER, //deprecated
+                (BYTE *)pbContainerData, &cbData, 0);
+            //name of container as char string 0 terminated
+            PP("Container Data: %s", pbContainerData);
+            if (!containerGpp) {
+                PrintException(env, "containerGpp", GetLastError());
+            }
 
             // Acquire an alternative CSP handle
-            if (::CryptAcquireContext(&hCryptProvAlt, LPCSTR(pbData), NULL, //deprecated
-                PROV_RSA_AES, 0) == FALSE)
+            if (::CryptAcquireContext(&hCryptProvAlt, LPCSTR(pbContainerData), NULL, //deprecated
+                PROV_RSA_AES, CRYPT_NEWKEYSET|CRYPT_SILENT) == FALSE) //TODO: Change last parameter back to 0
             {
+                PP("a3");
 
                 ThrowException(env, SIGNATURE_EXCEPTION, GetLastError());
                 __leave;
@@ -854,14 +879,17 @@ JNIEXPORT jbyteArray JNICALL Java_sun_security_mscapi_CSignature_signHash
             if (::CryptCreateHash(HCRYPTPROV(hCryptProvAlt), algId, 0, 0, //deprecated
                 &hHash) == FALSE)
             {
+                PP("a4");
                 ThrowException(env, SIGNATURE_EXCEPTION, GetLastError());
                 __leave;
             }
         }
+        PP("a5");
 
         // Copy hash from Java to native buffer
         pHashBuffer = new (env) jbyte[jHashSize];
         if (pHashBuffer == NULL) {
+            PP("a6");
             __leave;
         }
         env->GetByteArrayRegion(jHash, 0, jHashSize, pHashBuffer);
@@ -869,21 +897,27 @@ JNIEXPORT jbyteArray JNICALL Java_sun_security_mscapi_CSignature_signHash
         // Set hash value in the hash object
         if (::CryptSetHashParam(hHash, HP_HASHVAL, (BYTE*)pHashBuffer, NULL) == FALSE) //deprecated
         {
+            PP("a7");
             ThrowException(env, SIGNATURE_EXCEPTION, GetLastError());
             __leave;
         }
 
+        PP("a8");
         // Determine key spec.
         DWORD dwKeySpec = AT_SIGNATURE;
         ALG_ID dwAlgId;
         DWORD dwAlgIdLen = sizeof(ALG_ID);
 
         if (! ::CryptGetKeyParam((HCRYPTKEY) hCryptKey, KP_ALGID, (BYTE*)&dwAlgId, &dwAlgIdLen, 0)) { //deprecated
+            PP("a9");
             ThrowException(env, SIGNATURE_EXCEPTION, GetLastError());
             __leave;
-
         }
+        PP("a10");
+        dump("signHash - ALG_ID",(BYTE*)&dwAlgId,dwAlgIdLen);
+
         if (CALG_RSA_KEYX == dwAlgId) {
+            PP("a11");
             dwKeySpec = AT_KEYEXCHANGE;
         }
 
@@ -892,21 +926,25 @@ JNIEXPORT jbyteArray JNICALL Java_sun_security_mscapi_CSignature_signHash
         DWORD dwFlags = 0;
 
         if (noHashOID == JNI_TRUE) {
+            PP("a12");
             dwFlags = CRYPT_NOHASHOID; // omit hash OID in NONEwithRSA signature
         }
 
         if (::CryptSignHash(hHash, dwKeySpec, NULL, dwFlags, NULL, &dwBufLen) == FALSE) //deprecated
         {
+            PP("a13");
             ThrowException(env, SIGNATURE_EXCEPTION, GetLastError());
             __leave;
         }
 
         pSignedHashBuffer = new (env) jbyte[dwBufLen];
         if (pSignedHashBuffer == NULL) {
+            PP("a14");
             __leave;
         }
         if (::CryptSignHash(hHash, dwKeySpec, NULL, dwFlags, (BYTE*)pSignedHashBuffer, &dwBufLen) == FALSE) //deprecated
         {
+            PP("a15");
             ThrowException(env, SIGNATURE_EXCEPTION, GetLastError());
             __leave;
         }
@@ -914,8 +952,10 @@ JNIEXPORT jbyteArray JNICALL Java_sun_security_mscapi_CSignature_signHash
         // Create new byte array
         jbyteArray temp = env->NewByteArray(dwBufLen);
         if (temp == NULL) {
+            PP("a16");
             __leave;
         }
+        PP("a17");
 
         // Copy data from native buffer
         env->SetByteArrayRegion(temp, 0, dwBufLen, pSignedHashBuffer);
@@ -924,6 +964,7 @@ JNIEXPORT jbyteArray JNICALL Java_sun_security_mscapi_CSignature_signHash
     }
     __finally
     {
+        PP("a18");
         if (pSignedHashBuffer)
             delete [] pSignedHashBuffer;
 
@@ -936,7 +977,7 @@ JNIEXPORT jbyteArray JNICALL Java_sun_security_mscapi_CSignature_signHash
         if (hCryptProvAlt)
             ::CryptReleaseContext(hCryptProvAlt, 0); // deprecated
     }
-
+    PP("a19");
     return jSignedHash;
 }
 
